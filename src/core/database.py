@@ -61,6 +61,71 @@ def init_db() -> None:
             )
         """)
 
+        # ── Tabla de clientes ─────────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS clientes (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                cuit_dni         TEXT    DEFAULT '',
+                nombre           TEXT    NOT NULL,
+                telefono         TEXT    NOT NULL,
+                direccion        TEXT    DEFAULT '',
+                email            TEXT    DEFAULT '',
+                fecha_nacimiento TEXT    DEFAULT '',
+                sexo             TEXT    DEFAULT ''
+            )
+        """)
+
+        # ── Ventas ────────────────────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ventas (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id      INTEGER REFERENCES clientes(id) ON DELETE SET NULL,
+                nombre_cliente  TEXT    DEFAULT '',
+                estado          TEXT    NOT NULL DEFAULT 'abierta',
+                fecha_apertura  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+                fecha_cierre    TEXT    DEFAULT ''
+            )
+        """)
+
+        # ── Items de venta ────────────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS venta_items (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                venta_id         INTEGER NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+                producto_id      INTEGER REFERENCES productos(id) ON DELETE SET NULL,
+                variante_id      INTEGER REFERENCES producto_variantes(id) ON DELETE SET NULL,
+                nombre_producto  TEXT    NOT NULL DEFAULT '',
+                precio_unitario  REAL    NOT NULL DEFAULT 0,
+                cantidad         INTEGER NOT NULL DEFAULT 1,
+                subtotal         REAL    NOT NULL DEFAULT 0
+            )
+        """)
+
+        # ── Pagos ─────────────────────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pagos (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                venta_id INTEGER NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+                monto    REAL    NOT NULL DEFAULT 0,
+                tipo     TEXT    NOT NULL DEFAULT 'efectivo',
+                fecha    TEXT    NOT NULL DEFAULT (date('now','localtime'))
+            )
+        """)
+
+        # ── Devoluciones ──────────────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS devoluciones (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                venta_item_id     INTEGER NOT NULL REFERENCES venta_items(id) ON DELETE CASCADE,
+                venta_id          INTEGER NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+                cantidad_devuelta INTEGER NOT NULL DEFAULT 1,
+                cantidad_a_stock  INTEGER NOT NULL DEFAULT 0,
+                monto_devuelto    REAL    NOT NULL DEFAULT 0,
+                fecha             TEXT    NOT NULL DEFAULT (date('now','localtime')),
+                observacion       TEXT    DEFAULT ''
+            )
+        """)
+
         conn.commit()
 
         # ── Migración desde el esquema anterior ───────────────────────────
@@ -78,6 +143,30 @@ def _migrate_legacy(conn: sqlite3.Connection) -> None:
     SQLite no soporta DROP COLUMN antes de la versión 3.35; usamos
     recreación de tabla para compatibilidad amplia.
     """
+    # Migración: agregar variante_id a venta_items si no existe
+    vi_cols = {row[1] for row in conn.execute("PRAGMA table_info(venta_items)")}
+    if "variante_id" not in vi_cols:
+        conn.execute(
+            "ALTER TABLE venta_items ADD COLUMN variante_id INTEGER"
+            " REFERENCES producto_variantes(id) ON DELETE SET NULL"
+        )
+        conn.commit()
+
+    # Migración: crear tabla devoluciones si no existe (DBs antiguas)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS devoluciones (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            venta_item_id     INTEGER NOT NULL REFERENCES venta_items(id) ON DELETE CASCADE,
+            venta_id          INTEGER NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+            cantidad_devuelta INTEGER NOT NULL DEFAULT 1,
+            cantidad_a_stock  INTEGER NOT NULL DEFAULT 0,
+            monto_devuelto    REAL    NOT NULL DEFAULT 0,
+            fecha             TEXT    NOT NULL DEFAULT (date('now','localtime')),
+            observacion       TEXT    DEFAULT ''
+        )
+    """)
+    conn.commit()
+
     cols = {row[1] for row in conn.execute("PRAGMA table_info(productos)")}
     if not (cols & {"talla", "color", "stock", "imagen"}):
         return  # ya migrado

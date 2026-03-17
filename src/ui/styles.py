@@ -88,3 +88,10 @@ LABEL_SUBTITLE = {
     "fg": TEXT_MEDIUM,
     "font": (FONT_FAMILY, FONT_SIZE_LG),
 }
+
+
+def fmt_moneda(value: float) -> str:
+    """Formatea un importe con separador de miles (.) y decimales (,). Ej: $28.376,70"""
+    formatted = f"{value:,.2f}"               # "28,376.70"
+    formatted = formatted.replace(",", "_").replace(".", ",").replace("_", ".")
+    return f"${formatted}"

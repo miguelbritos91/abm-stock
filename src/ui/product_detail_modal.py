@@ -39,9 +39,11 @@ class ProductDetailModal(tk.Toplevel):
         # Mapas para filtrado rapido
         self._talla_colors: dict = defaultdict(set)   # {talla: {colores}}
         self._combo_stock:  dict = {}                  # {(talla, color): stock}
+        self._combo_id:     dict = {}                  # {(talla, color): variante_id}
         for v in product.variantes:
             self._talla_colors[v.talla].add(v.color)
             self._combo_stock[(v.talla, v.color)] = v.stock
+            self._combo_id[(v.talla, v.color)]    = v.id
 
         self._pill_talla: dict[str, tk.Button] = {}
         self._pill_color: dict[str, tk.Button] = {}
@@ -93,9 +95,9 @@ class ProductDetailModal(tk.Toplevel):
 
         _field("Categoria",       p.categoria or "-",               r); r += 1
         _field("Descripcion",     p.descripcion or "-",             r); r += 1
-        _field("Precio costo",    f"${p.precio_costo:.2f}",         r); r += 1
+        _field("Precio costo",    S.fmt_moneda(p.precio_costo),         r); r += 1
         _field("% Ganancia",      f"{p.porcentaje_ganancia:.1f}%",  r); r += 1
-        _field("Precio unitario", f"${p.precio_unitario:.2f}",      r); r += 1
+        _field("Precio unitario", S.fmt_moneda(p.precio_unitario),      r); r += 1
 
         # Imagenes
         if p.imagenes:
@@ -198,6 +200,14 @@ class ProductDetailModal(tk.Toplevel):
                 btn_frame, text="\U0001f5d1 Eliminar",
                 **S.BTN_DANGER, command=self._on_delete,
             ).pack(side="left")
+        else:
+            # Botón "Agregar a venta" solo visible desde Inicio
+            self._btn_add_venta = tk.Button(
+                btn_frame, text="\U0001f6d2 Agregar a venta",
+                **S.BTN_PRIMARY, command=self._on_agregar_venta,
+                state="disabled",
+            )
+            self._btn_add_venta.pack(side="left")
 
     # ------------------------------------------------------------------
     # Pills
@@ -269,6 +279,15 @@ class ProductDetailModal(tk.Toplevel):
             hint  = "(total)"
         self._stock_var.set(str(stock))
         self._stock_hint.config(text=hint)
+        # Habilitar/deshabilitar botón de agregar a venta
+        if not self._show_actions and hasattr(self, "_btn_add_venta"):
+            key = (self._talla_sel, self._color_sel)
+            combo_stock = self._combo_stock.get(key, 0)
+            can_add = (self._talla_sel is not None and
+                       self._color_sel is not None and
+                       self._combo_id.get(key) is not None and
+                       combo_stock > 0)
+            self._btn_add_venta.config(state="normal" if can_add else "disabled")
 
     # ------------------------------------------------------------------
     # Actions
@@ -295,3 +314,89 @@ class ProductDetailModal(tk.Toplevel):
             if self._on_save:
                 self._on_save()
             self.destroy()
+
+    def _on_agregar_venta(self):
+        """Pide cantidad y agrega la variante seleccionada a la venta activa."""
+        key   = (self._talla_sel, self._color_sel)
+        stock = self._combo_stock.get(key, 0)
+        vid   = self._combo_id.get(key)
+        p     = self._product
+        parts = [x for x in [self._talla_sel, self._color_sel] if x]
+        desc  = " / ".join(parts)
+
+        win = tk.Toplevel(self)
+        win.title("Cantidad a agregar")
+        win.configure(bg=S.BG)
+        win.resizable(False, False)
+        win.grab_set()
+
+        body = tk.Frame(win, bg=S.BG, padx=24, pady=16)
+        body.pack()
+        tk.Label(body, text=f"{p.nombre}  [{desc}]",
+                 bg=S.BG, fg=S.PRIMARY_DARK,
+                 font=(S.FONT_FAMILY, S.FONT_SIZE_MD, "bold")).pack(anchor="w", pady=(0, 4))
+        tk.Label(body, text=f"Stock disponible: {stock} unidad(es)",
+                 bg=S.BG, fg=S.TEXT_MEDIUM,
+                 font=(S.FONT_FAMILY, S.FONT_SIZE_SM, "italic")).pack(anchor="w", pady=(0, 10))
+
+        qty_row = tk.Frame(body, bg=S.BG)
+        qty_row.pack(anchor="w")
+        tk.Label(qty_row, text="Cantidad:", bg=S.BG, fg=S.TEXT_DARK,
+                 font=(S.FONT_FAMILY, S.FONT_SIZE_MD, "bold")).pack(side="left", padx=(0, 10))
+        qty_var = tk.StringVar(value="1")
+        qty_entry = tk.Entry(qty_row, textvariable=qty_var,
+                             **S.ENTRY_STYLE, width=6, justify="center")
+        qty_entry.pack(side="left")
+        qty_entry.select_range(0, tk.END)
+        qty_entry.focus_set()
+
+        def _confirmar():
+            try:
+                qty = int(qty_var.get())
+                if qty <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Inválido", "Ingresá una cantidad mayor a 0.", parent=win)
+                return
+            if qty > stock:
+                messagebox.showerror(
+                    "Stock insuficiente",
+                    f"Solo hay {stock} unidad(es) disponibles.",
+                    parent=win,
+                )
+                return
+            from src.models.venta import VentaItem
+            from src.services.venta_service import venta_service
+            venta = venta_service.obtener_o_crear_abierta()
+            nombre_label = f"{p.nombre} [{desc}]" if desc else p.nombre
+            nuevos = list(venta.items)
+            for item in nuevos:
+                if item.producto_id == p.id and item.variante_id == vid:
+                    item.cantidad += qty
+                    item.subtotal = round(item.precio_unitario * item.cantidad, 2)
+                    break
+            else:
+                nuevos.append(VentaItem(
+                    producto_id=p.id,
+                    nombre_producto=nombre_label,
+                    precio_unitario=p.precio_unitario,
+                    cantidad=qty,
+                    variante_id=vid,
+                ))
+            venta_service.sync_items(venta.id, nuevos)
+            win.destroy()
+            messagebox.showinfo(
+                "Agregado",
+                f"{qty} x {nombre_label} agregado a la venta #{venta.id}.",
+                parent=self,
+            )
+
+        btns = tk.Frame(win, bg=S.BG)
+        btns.pack(fill="x", padx=24, pady=(4, 16))
+        tk.Button(btns, text="Cancelar", **S.BTN_SECONDARY, command=win.destroy).pack(side="right")
+        tk.Button(btns, text="\u2714 Agregar", **S.BTN_PRIMARY, command=_confirmar).pack(side="right", padx=(0, 8))
+        win.bind("<Return>", lambda e: _confirmar())
+        win.update_idletasks()
+        ww, wh = win.winfo_width(), win.winfo_height()
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        win.geometry(f"{ww}x{wh}+{(sw-ww)//2}+{(sh-wh)//2}")

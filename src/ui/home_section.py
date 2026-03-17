@@ -264,7 +264,7 @@ class HomeSection(tk.Frame):
             font=(S.FONT_FAMILY, S.FONT_SIZE_SM), anchor="w",
         ).pack(anchor="w")
         tk.Label(
-            info, text=f"${p.precio_unitario:.2f}",
+            info, text=S.fmt_moneda(p.precio_unitario),
             bg=S.BG_CARD, fg=S.PRIMARY,
             font=(S.FONT_FAMILY, S.FONT_SIZE_LG, "bold"), anchor="w",
         ).pack(anchor="w", pady=(4, 0))
@@ -326,7 +326,7 @@ class HomeSection(tk.Frame):
             variantes_txt = f"{len(p.variantes)} variante(s)" if p.variantes else "-"
             tree.insert("", "end", iid=str(p.id), values=(
                 p.codigo, p.nombre, p.categoria, variantes_txt,
-                p.stock_total, f"${p.precio_costo:.2f}", f"${p.precio_unitario:.2f}",
+                p.stock_total, S.fmt_moneda(p.precio_costo), S.fmt_moneda(p.precio_unitario),
             ))
 
         def _on_double_click(event):

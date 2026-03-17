@@ -9,6 +9,9 @@ from src.core import app_info as info
 from src.ui import styles as S
 from src.ui.home_section import HomeSection
 from src.ui.products_section import ProductsSection
+from src.ui.clientes_section import ClientesSection
+from src.ui.venta_section import VentaSection
+from src.ui.historial_ventas_section import HistorialVentasSection
 from src.ui.about_modal import AboutModal
 
 
@@ -65,8 +68,11 @@ class App(tk.Tk):
 
         # Instanciar secciones
         self._sections: dict[str, tk.Frame] = {
-            "home":     HomeSection(self.content),
-            "products": ProductsSection(self.content),
+            "home":      HomeSection(self.content),
+            "products":  ProductsSection(self.content),
+            "clientes":  ClientesSection(self.content),
+            "ventas":    VentaSection(self.content),
+            "historial": HistorialVentasSection(self.content),
         }
         self._show_section("home")
 
@@ -88,8 +94,11 @@ class App(tk.Tk):
 
         # Ítems de navegación
         nav_items = [
-            ("home",     "🏠  Inicio"),
-            ("products", "📦  Productos"),
+            ("home",      "🏠  Inicio"),
+            ("products",  "📦  Productos"),
+            ("clientes",  "👥  Clientes"),
+            ("ventas",    "🛒  Ventas"),
+            ("historial", "📋  Historial"),
         ]
         nav_frame = tk.Frame(sidebar, bg=S.BG_SIDEBAR)
         nav_frame.pack(fill="x", pady=(8, 0))
