@@ -1,0 +1,132 @@
+# =============================================================================
+# ABM Stock — .gitignore
+# Python + Windows + tkinter + PyInstaller + VS Code
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Python — bytecode y caché
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+.env/
+*.env
+
+# Distribución / empaquetado
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+.eggs/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.dist-info/
+
+# pytest / cobertura
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# mypy / tipado
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# -----------------------------------------------------------------------------
+# PyInstaller — artefactos de compilación
+# -----------------------------------------------------------------------------
+dist/
+build/
+*.spec
+# El directorio dist/ABMStock/ se genera con build.bat — no versionar binarios
+
+# -----------------------------------------------------------------------------
+# Base de datos SQLite (datos del usuario, no del repo)
+# -----------------------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+
+# -----------------------------------------------------------------------------
+# Imágenes de productos (runtime, no del repo)
+# -----------------------------------------------------------------------------
+images/*
+# Mantener la carpeta vacía con un placeholder
+!images/.gitkeep
+
+# -----------------------------------------------------------------------------
+# Assets de desarrollo — se versionan completos (iconos, logos, etc.)
+# La carpeta assets/ se usa para construir la app: NO se ignora.
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Windows — archivos de sistema
+# -----------------------------------------------------------------------------
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.tmp
+*.temp
+
+# -----------------------------------------------------------------------------
+# VS Code
+# -----------------------------------------------------------------------------
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# -----------------------------------------------------------------------------
+# JetBrains / PyCharm
+# -----------------------------------------------------------------------------
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# -----------------------------------------------------------------------------
+# Logs y archivos temporales
+# -----------------------------------------------------------------------------
+*.log
+*.bak
+*.swp
+*.orig
+logs/
+
+# -----------------------------------------------------------------------------
+# Inno Setup — archivos intermedios de compilación
+# -----------------------------------------------------------------------------
+*.iss
+Output/
+
+# -----------------------------------------------------------------------------
+# Builds — solo ignorar los binarios, no el .gitignore interno
+# -----------------------------------------------------------------------------
+builds/*.exe
+builds/*.zip
+builds/*.msi
