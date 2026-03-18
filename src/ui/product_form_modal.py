@@ -106,20 +106,48 @@ class ProductFormModal(tk.Toplevel):
         self.e_costo.bind("<KeyRelease>",    self._calc_precio)
         self.e_ganancia.bind("<KeyRelease>", self._calc_precio)
 
-        # Precio unitario (calculado, solo lectura)
+        # Precio sugerido (solo lectura, calculado automáticamente)
+        tk.Label(
+            self.body, text="Precio sugerido ($):",
+            bg=S.BG, fg=S.TEXT_MEDIUM,
+            font=(S.FONT_FAMILY, S.FONT_SIZE_SM, "bold"), anchor="e",
+        ).grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
+        frame_sugerido = tk.Frame(self.body, bg=S.BG)
+        frame_sugerido.grid(row=row, column=1, sticky="ew", pady=5, padx=(0, 4))
+        self.e_precio_sugerido = tk.Entry(
+            frame_sugerido,
+            font=(S.FONT_FAMILY, S.FONT_SIZE_MD),
+            state="disabled", relief="solid", bd=1,
+            disabledbackground="#f0f0f0",
+            disabledforeground=S.TEXT_MEDIUM,
+        )
+        self.e_precio_sugerido.pack(side="left", fill="x", expand=True)
+        tk.Label(
+            frame_sugerido, text="(costo + % ganancia)",
+            bg=S.BG, fg=S.TEXT_LIGHT,
+            font=(S.FONT_FAMILY, S.FONT_SIZE_SM),
+        ).pack(side="left", padx=(6, 0))
+        row += 1
+
+        # Precio unitario (editable; en edición el usuario decide si actualiza)
         tk.Label(
             self.body, text="Precio unitario ($):",
             bg=S.BG, fg=S.TEXT_MEDIUM,
             font=(S.FONT_FAMILY, S.FONT_SIZE_SM, "bold"), anchor="e",
         ).grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
+        frame_unitario = tk.Frame(self.body, bg=S.BG)
+        frame_unitario.grid(row=row, column=1, sticky="ew", pady=5, padx=(0, 4))
         self.e_precio = tk.Entry(
-            self.body,
-            font=(S.FONT_FAMILY, S.FONT_SIZE_MD),
-            state="disabled", relief="solid", bd=1,
-            disabledbackground="#f0f0f0",
-            disabledforeground=S.TEXT_DARK,
+            frame_unitario,
+            **S.ENTRY_STYLE,
         )
-        self.e_precio.grid(row=row, column=1, sticky="ew", pady=5, padx=(0, 4))
+        self.e_precio.pack(side="left", fill="x", expand=True)
+        self._lbl_precio_hint = tk.Label(
+            frame_unitario,
+            bg=S.BG, fg=S.TEXT_LIGHT,
+            font=(S.FONT_FAMILY, S.FONT_SIZE_SM),
+        )
+        self._lbl_precio_hint.pack(side="left", padx=(6, 0))
         row += 1
 
         # ── Sección Variantes ──────────────────────────────────────────
@@ -229,21 +257,38 @@ class ProductFormModal(tk.Toplevel):
             w.destroy()
         self._photos.clear()
 
-        strip = tk.Frame(self._imagenes_container, bg=S.BG)
-        strip.pack(fill="x")
+        strip_outer = tk.Frame(self._imagenes_container, bg=S.BG)
+        strip_outer.pack(fill="x")
+
+        strip_canvas = tk.Canvas(strip_outer, bg=S.BG, height=110, highlightthickness=0)
+        h_scroll = tk.Scrollbar(strip_outer, orient="horizontal", command=strip_canvas.xview)
+        strip_canvas.configure(xscrollcommand=h_scroll.set)
+        h_scroll.pack(side="bottom", fill="x")
+        strip_canvas.pack(side="top", fill="x")
+
+        inner_strip = tk.Frame(strip_canvas, bg=S.BG)
+        strip_canvas.create_window((0, 0), window=inner_strip, anchor="nw")
 
         for img in self._imagenes_existentes:
             path = producto_service.get_image_path(img.filename)
             self._make_image_thumb(
-                strip, path,
+                inner_strip, path,
                 on_remove=lambda fi=img: self._remove_existente(fi),
             )
 
         for i, src in enumerate(self._nuevas_src):
             self._make_image_thumb(
-                strip, src,
+                inner_strip, src,
                 on_remove=lambda idx=i: self._remove_nueva(idx),
             )
+
+        inner_strip.update_idletasks()
+        strip_canvas.configure(scrollregion=strip_canvas.bbox("all"))
+
+        def _on_mwheel(event):
+            strip_canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
+        strip_canvas.bind("<MouseWheel>", _on_mwheel)
+        inner_strip.bind("<MouseWheel>", _on_mwheel)
 
         tk.Button(
             self._imagenes_container, text="+ Agregar imagen",
@@ -311,7 +356,9 @@ class ProductFormModal(tk.Toplevel):
         _set(self.e_categoria, p.categoria)
         _set(self.e_costo,     p.precio_costo)
         _set(self.e_ganancia,  p.porcentaje_ganancia)
-        self._set_precio(p.precio_unitario)
+        self._set_precio_sugerido(p.precio_sugerido)
+        self._set_precio_unitario(p.precio_unitario)
+        self._lbl_precio_hint.config(text="(puede editarlo)")
 
         self._variantes = [
             {"id": v.id, "talla": v.talla, "color": v.color, "stock": v.stock}
@@ -325,17 +372,25 @@ class ProductFormModal(tk.Toplevel):
 
     def _calc_precio(self, event=None):
         try:
-            costo  = float(self.e_costo.get().replace(",", "."))
-            pct    = float(self.e_ganancia.get().replace(",", "."))
-            self._set_precio(costo + costo * pct / 100)
+            costo = float(self.e_costo.get().replace(",", "."))
+            pct   = float(self.e_ganancia.get().replace(",", "."))
+            sugerido = round(costo + costo * pct / 100, 2)
         except ValueError:
-            self._set_precio(0)
+            sugerido = 0.0
+        self._set_precio_sugerido(sugerido)
+        # En modo creación se sincroniza precio_unitario con el sugerido
+        if not self.product:
+            self._set_precio_unitario(sugerido)
 
-    def _set_precio(self, value):
-        self.e_precio.config(state="normal")
+    def _set_precio_sugerido(self, value):
+        self.e_precio_sugerido.config(state="normal")
+        self.e_precio_sugerido.delete(0, tk.END)
+        self.e_precio_sugerido.insert(0, f"{float(value):.2f}")
+        self.e_precio_sugerido.config(state="disabled")
+
+    def _set_precio_unitario(self, value):
         self.e_precio.delete(0, tk.END)
         self.e_precio.insert(0, f"{float(value):.2f}")
-        self.e_precio.config(state="disabled")
 
     # ── Guardar ──────────────────────────────────────────────────────────
 
@@ -349,9 +404,10 @@ class ProductFormModal(tk.Toplevel):
         try:
             float(self.e_costo.get().replace(",", "."))
             float(self.e_ganancia.get().replace(",", "."))
+            float(self.e_precio.get().replace(",", "."))
         except ValueError:
             messagebox.showwarning(
-                "Validación", "Precio de costo y % ganancia deben ser números.", parent=self
+                "Validación", "Precio de costo, % ganancia y precio unitario deben ser números.", parent=self
             )
             return False
         for v in self._variantes:
@@ -375,6 +431,7 @@ class ProductFormModal(tk.Toplevel):
             "categoria":           self.e_categoria.get().strip(),
             "precio_costo":        float(self.e_costo.get().replace(",", ".")),
             "porcentaje_ganancia": float(self.e_ganancia.get().replace(",", ".")),
+            "precio_unitario":     float(self.e_precio.get().replace(",", ".")),
         }
 
         try:

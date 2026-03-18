@@ -2,6 +2,7 @@
 Modal de detalle de producto.
 
 - Pills interactivos de Talla / Color que filtran el stock mostrado.
+- Carrusel de imágenes: tira con scroll horizontal + lightbox al hacer clic.
 - show_actions=False  ->  solo boton Cerrar  (Inicio)
 - show_actions=True   ->  Cerrar + Editar + Eliminar  (Productos)
 """
@@ -95,27 +96,71 @@ class ProductDetailModal(tk.Toplevel):
 
         _field("Categoria",       p.categoria or "-",               r); r += 1
         _field("Descripcion",     p.descripcion or "-",             r); r += 1
-        _field("Precio costo",    S.fmt_moneda(p.precio_costo),         r); r += 1
-        _field("% Ganancia",      f"{p.porcentaje_ganancia:.1f}%",  r); r += 1
-        _field("Precio unitario", S.fmt_moneda(p.precio_unitario),      r); r += 1
+        _field("Precio costo",      S.fmt_moneda(p.precio_costo),        r); r += 1
+        _field("% Ganancia",        f"{p.porcentaje_ganancia:.1f}%", r); r += 1
+        _field("Precio sugerido",   S.fmt_moneda(p.precio_sugerido),    r); r += 1
+        _field("Precio unitario",   S.fmt_moneda(p.precio_unitario),    r); r += 1
 
-        # Imagenes
+        # Imagenes — tira horizontal con scroll y lightbox al clicar
         if p.imagenes:
             tk.Label(
                 body, text="Imagenes:",
                 bg=S.BG, fg=S.TEXT_MEDIUM,
                 font=(S.FONT_FAMILY, S.FONT_SIZE_SM, "bold"), anchor="nw",
             ).grid(row=r, column=0, sticky="nw", padx=(0, 14), pady=(10, 4))
-            strip = tk.Frame(body, bg=S.BG)
-            strip.grid(row=r, column=1, sticky="w", pady=(10, 4))
+
+            # Contenedor de la tira con scroll horizontal
+            strip_outer = tk.Frame(body, bg=S.BG)
+            strip_outer.grid(row=r, column=1, sticky="w", pady=(10, 4))
+
+            strip_canvas = tk.Canvas(
+                strip_outer, bg=S.BG, height=96, highlightthickness=0,
+            )
+            h_scroll = tk.Scrollbar(
+                strip_outer, orient="horizontal", command=strip_canvas.xview,
+            )
+            strip_canvas.configure(xscrollcommand=h_scroll.set)
+            strip_canvas.pack(side="top", fill="x")
+            h_scroll.pack(side="top", fill="x")
+
+            inner_strip = tk.Frame(strip_canvas, bg=S.BG)
+            strip_canvas.create_window((0, 0), window=inner_strip, anchor="nw")
+            inner_strip.bind(
+                "<Configure>",
+                lambda e: strip_canvas.configure(
+                    scrollregion=strip_canvas.bbox("all"),
+                    width=min(e.width, 500),
+                ),
+            )
+
+            # Scroll horizontal con rueda del mouse sobre la tira
+            strip_canvas.bind(
+                "<MouseWheel>",
+                lambda e: strip_canvas.xview_scroll(int(-1 * (e.delta / 120)), "units"),
+            )
+
+            # Cargar miniaturas y construir índice de paths
+            self._img_paths: list[str] = []
             for img in p.imagenes:
                 path = producto_service.get_image_path(img.filename)
-                photo = W.load_thumbnail(path, size=(80, 80)) if path else None
-                if photo:
-                    self._photos.append(photo)
-                    tk.Label(strip, image=photo, bg=S.BG, relief="solid", bd=1).pack(
-                        side="left", padx=(0, 4)
-                    )
+                if not path:
+                    continue
+                photo = W.load_thumbnail(path, size=(80, 80))
+                if not photo:
+                    continue
+                self._photos.append(photo)
+                self._img_paths.append(path)
+                idx = len(self._img_paths) - 1
+                lbl = tk.Label(
+                    inner_strip, image=photo, bg=S.BG,
+                    relief="solid", bd=1, cursor="hand2",
+                )
+                lbl.pack(side="left", padx=(0, 5))
+                lbl.bind("<Button-1>", lambda e, i=idx: self._open_lightbox(i))
+                # Tooltip de índice
+                lbl.bind("<Enter>", lambda e, i=idx: e.widget.config(relief="sunken", bd=2))
+                lbl.bind("<Leave>", lambda e: e.widget.config(relief="solid", bd=1))
+
             r += 1
 
         # Separador
@@ -314,6 +359,145 @@ class ProductDetailModal(tk.Toplevel):
             if self._on_save:
                 self._on_save()
             self.destroy()
+
+    # ------------------------------------------------------------------
+    # Lightbox — carrusel de imágenes ampliadas
+    # ------------------------------------------------------------------
+
+    def _open_lightbox(self, start_index: int = 0):
+        paths = getattr(self, "_img_paths", [])
+        if not paths:
+            return
+
+        lb = tk.Toplevel(self)
+        lb.title("Imágenes del producto")
+        lb.configure(bg="#1A1A1A")
+        lb.resizable(True, True)
+        lb.minsize(600, 500)
+        lb.grab_set()
+
+        state = {"idx": start_index, "main_photo": None, "thumb_photos": []}
+
+        # ── Área de imagen principal ──────────────────────────────────────
+        top_frame = tk.Frame(lb, bg="#1A1A1A")
+        top_frame.pack(fill="both", expand=True, padx=12, pady=(12, 6))
+
+        btn_prev = tk.Button(
+            top_frame, text="❮",
+            bg="#2C2C2C", fg="white",
+            font=(S.FONT_FAMILY, 18, "bold"),
+            relief="flat", cursor="hand2", bd=0,
+            activebackground="#444", activeforeground="white",
+            padx=10,
+        )
+        btn_prev.pack(side="left", fill="y")
+
+        img_canvas = tk.Canvas(top_frame, bg="#1A1A1A", highlightthickness=0)
+        img_canvas.pack(side="left", fill="both", expand=True)
+
+        btn_next = tk.Button(
+            top_frame, text="❯",
+            bg="#2C2C2C", fg="white",
+            font=(S.FONT_FAMILY, 18, "bold"),
+            relief="flat", cursor="hand2", bd=0,
+            activebackground="#444", activeforeground="white",
+            padx=10,
+        )
+        btn_next.pack(side="left", fill="y")
+
+        counter_var = tk.StringVar()
+        tk.Label(
+            lb, textvariable=counter_var,
+            bg="#1A1A1A", fg="#AAAAAA",
+            font=(S.FONT_FAMILY, S.FONT_SIZE_SM),
+        ).pack(pady=(0, 4))
+
+        # ── Tira de miniaturas inferior ───────────────────────────────────
+        thumb_outer = tk.Frame(lb, bg="#1A1A1A")
+        thumb_outer.pack(fill="x", padx=12, pady=(0, 12))
+
+        thumb_canvas = tk.Canvas(
+            thumb_outer, bg="#1A1A1A", height=74, highlightthickness=0,
+        )
+        thumb_scroll = tk.Scrollbar(
+            thumb_outer, orient="horizontal", command=thumb_canvas.xview,
+        )
+        thumb_canvas.configure(xscrollcommand=thumb_scroll.set)
+        thumb_canvas.pack(side="top", fill="x")
+        thumb_scroll.pack(side="top", fill="x")
+
+        thumb_strip = tk.Frame(thumb_canvas, bg="#1A1A1A")
+        thumb_canvas.create_window((0, 0), window=thumb_strip, anchor="nw")
+        thumb_strip.bind(
+            "<Configure>",
+            lambda e: thumb_canvas.configure(scrollregion=thumb_canvas.bbox("all")),
+        )
+        thumb_canvas.bind(
+            "<MouseWheel>",
+            lambda e: thumb_canvas.xview_scroll(int(-1 * (e.delta / 120)), "units"),
+        )
+
+        thumb_labels: list[tk.Label] = []
+        for i, path in enumerate(paths):
+            ph = W.load_thumbnail(path, size=(60, 60))
+            state["thumb_photos"].append(ph)
+            lbl = tk.Label(
+                thumb_strip, image=ph if ph else None,
+                bg="#2C2C2C", relief="flat", bd=2, cursor="hand2",
+            )
+            lbl.pack(side="left", padx=(0, 4))
+            lbl.bind("<Button-1>", lambda e, i=i: _go_to(i))
+            thumb_labels.append(lbl)
+
+        # ── Navegación ────────────────────────────────────────────────────
+        def _go_to(idx: int):
+            idx = idx % len(paths)
+            state["idx"] = idx
+            counter_var.set(f"{idx + 1} / {len(paths)}")
+
+            lb.update_idletasks()
+            cw = max(img_canvas.winfo_width(), 400)
+            ch = max(img_canvas.winfo_height(), 320)
+            result = W.load_image_fit(paths[idx], cw - 4, ch - 4)
+            img_canvas.delete("all")
+            if result:
+                photo, pw, ph_ = result
+                state["main_photo"] = photo
+                img_canvas.create_image(cw // 2, ch // 2, anchor="center", image=photo)
+            else:
+                img_canvas.create_text(
+                    cw // 2, ch // 2, text="Sin imagen",
+                    fill="#666", font=(S.FONT_FAMILY, 12),
+                )
+
+            for i, lbl in enumerate(thumb_labels):
+                lbl.config(
+                    bg=S.PRIMARY if i == idx else "#2C2C2C",
+                    relief="solid" if i == idx else "flat",
+                )
+
+            lb.update_idletasks()
+            strip_w = thumb_strip.winfo_width()
+            if strip_w > 0 and thumb_labels:
+                lbl_x = thumb_labels[idx].winfo_x()
+                lbl_w = thumb_labels[idx].winfo_width()
+                viewport_w = thumb_canvas.winfo_width()
+                frac = max(0.0, min(1.0, (lbl_x + lbl_w / 2 - viewport_w / 2) / strip_w))
+                thumb_canvas.xview_moveto(frac)
+
+        btn_prev.config(command=lambda: _go_to(state["idx"] - 1))
+        btn_next.config(command=lambda: _go_to(state["idx"] + 1))
+        img_canvas.bind("<Configure>", lambda e: _go_to(state["idx"]))
+        lb.bind("<Left>",  lambda e: _go_to(state["idx"] - 1))
+        lb.bind("<Right>", lambda e: _go_to(state["idx"] + 1))
+        lb.bind("<Escape>", lambda e: lb.destroy())
+
+        lb.update_idletasks()
+        sw, sh = lb.winfo_screenwidth(), lb.winfo_screenheight()
+        w, h = max(lb.winfo_width(), 720), max(lb.winfo_height(), 560)
+        lb.geometry(f"{w}x{h}+{(sw - w)//2}+{(sh - h)//2}")
+
+        _go_to(start_index)
 
     def _on_agregar_venta(self):
         """Pide cantidad y agrega la variante seleccionada a la venta activa."""

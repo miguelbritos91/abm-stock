@@ -95,7 +95,8 @@ class ProductoService:
         ]
 
         p = Producto.from_dict(data)
-        p.precio_unitario = p.calcular_precio_unitario()
+        p.precio_sugerido = p.calcular_precio_sugerido()
+        p.precio_unitario = p.precio_sugerido  # por defecto al crear
         p.variantes = variantes_obj
         p.imagenes  = imagenes
         producto_repository.insert(p)
@@ -143,7 +144,8 @@ class ProductoService:
         ]
 
         p = Producto.from_dict({**data, "id": product_id})
-        p.precio_unitario = p.calcular_precio_unitario()
+        p.precio_sugerido = p.calcular_precio_sugerido()
+        # precio_unitario viene del formulario (el usuario decide si ajustarlo)
         p.variantes = variantes_obj
         p.imagenes  = imagenes_existentes + nuevas_imagenes
         producto_repository.update(p)

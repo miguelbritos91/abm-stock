@@ -32,6 +32,7 @@ def init_db() -> None:
                 descripcion         TEXT    DEFAULT '',
                 precio_costo        REAL    DEFAULT 0,
                 porcentaje_ganancia REAL    DEFAULT 0,
+                precio_sugerido     REAL    DEFAULT 0,
                 precio_unitario     REAL    DEFAULT 0,
                 categoria           TEXT    DEFAULT ''
             )
@@ -143,6 +144,18 @@ def _migrate_legacy(conn: sqlite3.Connection) -> None:
     SQLite no soporta DROP COLUMN antes de la versión 3.35; usamos
     recreación de tabla para compatibilidad amplia.
     """
+    # Migración: agregar precio_sugerido a productos si no existe
+    prod_cols = {row[1] for row in conn.execute("PRAGMA table_info(productos)")}
+    if "precio_sugerido" not in prod_cols:
+        conn.execute(
+            "ALTER TABLE productos ADD COLUMN precio_sugerido REAL DEFAULT 0"
+        )
+        # Inicializar precio_sugerido = precio_costo + precio_costo * porcentaje_ganancia / 100
+        conn.execute(
+            "UPDATE productos SET precio_sugerido = ROUND(precio_costo + precio_costo * porcentaje_ganancia / 100, 2)"
+        )
+        conn.commit()
+
     # Migración: agregar variante_id a venta_items si no existe
     vi_cols = {row[1] for row in conn.execute("PRAGMA table_info(venta_items)")}
     if "variante_id" not in vi_cols:
@@ -206,6 +219,7 @@ def _migrate_legacy(conn: sqlite3.Connection) -> None:
             descripcion         TEXT    DEFAULT '',
             precio_costo        REAL    DEFAULT 0,
             porcentaje_ganancia REAL    DEFAULT 0,
+            precio_sugerido     REAL    DEFAULT 0,
             precio_unitario     REAL    DEFAULT 0,
             categoria           TEXT    DEFAULT ''
         )
@@ -213,9 +227,11 @@ def _migrate_legacy(conn: sqlite3.Connection) -> None:
     conn.execute("""
         INSERT INTO productos_new
             (id, codigo, nombre, descripcion,
-             precio_costo, porcentaje_ganancia, precio_unitario, categoria)
+             precio_costo, porcentaje_ganancia, precio_sugerido, precio_unitario, categoria)
         SELECT id, codigo, nombre, descripcion,
-               precio_costo, porcentaje_ganancia, precio_unitario, categoria
+               precio_costo, porcentaje_ganancia,
+               ROUND(precio_costo + precio_costo * porcentaje_ganancia / 100, 2),
+               precio_unitario, categoria
         FROM productos
     """)
     conn.execute("DROP TABLE productos")

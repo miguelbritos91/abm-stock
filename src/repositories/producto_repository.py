@@ -194,10 +194,10 @@ class ProductoRepository:
             cur = conn.execute(
                 """INSERT INTO productos
                    (codigo, nombre, descripcion, precio_costo,
-                    porcentaje_ganancia, precio_unitario, categoria)
-                   VALUES (?,?,?,?,?,?,?)""",
+                    porcentaje_ganancia, precio_sugerido, precio_unitario, categoria)
+                   VALUES (?,?,?,?,?,?,?,?)""",
                 (p.codigo, p.nombre, p.descripcion, p.precio_costo,
-                 p.porcentaje_ganancia, p.precio_unitario, p.categoria),
+                 p.porcentaje_ganancia, p.precio_sugerido, p.precio_unitario, p.categoria),
             )
             product_id = cur.lastrowid
             self._save_variantes(conn, product_id, p.variantes)
@@ -213,10 +213,10 @@ class ProductoRepository:
             conn.execute(
                 """UPDATE productos SET
                    codigo=?, nombre=?, descripcion=?, precio_costo=?,
-                   porcentaje_ganancia=?, precio_unitario=?, categoria=?
+                   porcentaje_ganancia=?, precio_sugerido=?, precio_unitario=?, categoria=?
                    WHERE id=?""",
                 (p.codigo, p.nombre, p.descripcion, p.precio_costo,
-                 p.porcentaje_ganancia, p.precio_unitario, p.categoria,
+                 p.porcentaje_ganancia, p.precio_sugerido, p.precio_unitario, p.categoria,
                  p.id),
             )
             self._save_variantes(conn, p.id, p.variantes)

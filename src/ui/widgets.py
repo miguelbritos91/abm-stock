@@ -48,11 +48,13 @@ def load_thumbnail(image_path: str, size=(160, 160)) -> ImageTk.PhotoImage | Non
         return None
 
 
-def load_image(image_path: str, size=(300, 300)) -> ImageTk.PhotoImage | None:
+def load_image_fit(image_path: str, max_w: int, max_h: int) -> "tuple[ImageTk.PhotoImage, int, int] | None":
+    """Carga una imagen y la escala para caber en max_w × max_h conservando aspecto."""
     try:
         img = Image.open(image_path)
-        img.thumbnail(size, Image.LANCZOS)
-        return ImageTk.PhotoImage(img)
+        img.thumbnail((max_w, max_h), Image.LANCZOS)
+        photo = ImageTk.PhotoImage(img)
+        return photo, img.width, img.height
     except Exception:
         return None
 

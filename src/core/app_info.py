@@ -26,9 +26,9 @@ APP_DESCRIPTION = (
 
 # ── Desarrollador y propietario ───────────────────────────────────────────────
 
-DEVELOPER_NAME    = "Miguel"            # <<< completar nombre completo
+DEVELOPER_NAME    = "Miguel Britos"            # <<< completar nombre completo
 DEVELOPER_COMPANY = ""                  # <<< nombre empresa / marca (opcional)
-DEVELOPER_EMAIL   = ""                  # <<< email de contacto
+DEVELOPER_EMAIL   = "miguelbritos91@gmail.com"                  # <<< email de contacto
 DEVELOPER_WEBSITE = ""                  # <<< sitio web (opcional)
 DEVELOPER_PHONE   = ""                  # <<< teléfono / WhatsApp (opcional)
 

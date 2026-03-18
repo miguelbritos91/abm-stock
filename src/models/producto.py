@@ -64,6 +64,7 @@ class Producto:
     descripcion: str = ""
     precio_costo: float = 0.0
     porcentaje_ganancia: float = 0.0
+    precio_sugerido: float = 0.0
     precio_unitario: float = 0.0
     categoria: str = ""
     variantes: list[ProductoVariante] = field(default_factory=list)
@@ -71,7 +72,7 @@ class Producto:
 
     # ── Lógica de negocio del modelo ────────────────────────────────────
 
-    def calcular_precio_unitario(self) -> float:
+    def calcular_precio_sugerido(self) -> float:
         """Precio de costo + margen de ganancia porcentual."""
         return round(
             self.precio_costo + self.precio_costo * self.porcentaje_ganancia / 100,
@@ -103,6 +104,7 @@ class Producto:
             descripcion=row["descripcion"] or "",
             precio_costo=float(row["precio_costo"] or 0),
             porcentaje_ganancia=float(row["porcentaje_ganancia"] or 0),
+            precio_sugerido=float(row["precio_sugerido"] or 0),
             precio_unitario=float(row["precio_unitario"] or 0),
             categoria=row["categoria"] or "",
         )
@@ -117,6 +119,7 @@ class Producto:
             descripcion=data.get("descripcion", ""),
             precio_costo=float(data.get("precio_costo", 0)),
             porcentaje_ganancia=float(data.get("porcentaje_ganancia", 0)),
+            precio_sugerido=float(data.get("precio_sugerido", 0)),
             precio_unitario=float(data.get("precio_unitario", 0)),
             categoria=data.get("categoria", ""),
         )
