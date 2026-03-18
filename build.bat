@@ -96,18 +96,54 @@ if exist "assets\icon.ico" (
     echo         Usando icono: assets\icon.ico
 )
 
+:: Detectar directorio de instalacion de Python
+for /f "tokens=*" %%p in ('!PYTHON! -c "import os,sys; print(os.path.dirname(sys.executable))"') do set PY_DIR=%%p
+echo         Directorio de Python: !PY_DIR!
+
+:: Incluir python3XX.dll explicitamente (necesario con pythoncore/NuGet)
+set PYDLL_FLAGS=
+pushd "!PY_DIR!"
+for %%d in (python3*.dll) do (
+    set "PYDLL_FLAGS=!PYDLL_FLAGS! --add-binary "!PY_DIR!\%%d;.""
+    echo         Incluyendo: %%d
+)
+popd
+
+:: Incluir vcruntime DLLs — busca en dir de Python, luego en System32 (por archivo)
+set VCRT_FLAGS=
+for %%d in (vcruntime140.dll vcruntime140_1.dll msvcp140.dll) do (
+    if exist "!PY_DIR!\%%d" (
+        set "VCRT_FLAGS=!VCRT_FLAGS! --add-binary "!PY_DIR!\%%d;.""
+        echo         Incluyendo: %%d (desde Python dir^)
+    ) else if exist "%SystemRoot%\System32\%%d" (
+        set "VCRT_FLAGS=!VCRT_FLAGS! --add-binary "%SystemRoot%\System32\%%d;.""
+        echo         Incluyendo: %%d (desde System32^)
+    ) else (
+        echo         AVISO: %%d no encontrado - puede faltar VC++ Redistributable
+    )
+)
+
 !PYTHON! -m PyInstaller ^
     --name "ABMStock" ^
     --windowed ^
     --noconfirm ^
     --clean ^
+    --distpath "dist" ^
+    --contents-directory "." ^
     --paths "." ^
+    --additional-hooks-dir "hooks" ^
     !ICON_ARG! ^
     --add-data "assets;assets" ^
     --collect-all PIL ^
     --hidden-import tkinter ^
     --hidden-import tkinter.ttk ^
+    --hidden-import tkcalendar ^
+    --hidden-import tkcalendar.calendar_ ^
+    --hidden-import tkcalendar.dateentry ^
+    --hidden-import tkcalendar.tooltip ^
     --hidden-import sqlite3 ^
+    !PYDLL_FLAGS! ^
+    !VCRT_FLAGS! ^
     main.py
 
 if errorlevel 1 (
@@ -127,13 +163,14 @@ if exist "README.md"  copy /y "README.md"  "dist\ABMStock\README.md"  >nul
 
 echo.
 echo         Compilacion exitosa.
-echo         Binarios generados en: dist\ABMStock\
+echo         Ejecutable: dist\ABMStock\ABMStock.exe
+echo         (ejecutar desde dist\ABMStock\, no desde build\)
 
 :: ============================================================
 ::  PASO 5/5 — Generar instalador (.exe) o ZIP portable
 :: ============================================================
 echo.
-echo  [5/5] Generando instalador Windows...
+echo  [5/5] Generando instalador MSI de Windows...
 echo.
 
 !PYTHON! scripts\build_installer.py
@@ -155,15 +192,19 @@ echo   BUILD COMPLETADO EXITOSAMENTE
 echo  ====================================================
 echo.
 
+for %%f in (builds\ABMStock_v*.msi) do (
+    echo   Instalador MSI     : builds\%%~nxf
+)
 for %%f in (builds\ABMStock_Setup_*.exe) do (
-    echo   Instalador Windows : builds\%%~nxf
+    echo   Instalador EXE     : builds\%%~nxf
 )
 for %%f in (builds\ABMStock_*_portable.zip) do (
     echo   ZIP portable       : builds\%%~nxf
 )
 
 echo.
-echo  Para instalar la aplicacion ejecuta el archivo
-echo  ABMStock_Setup_*.exe como Administrador.
+echo  Para instalar ejecuta el archivo .msi como Administrador.
+echo  El instalador MSI permite upgrade, reparacion y desinstalacion
+echo  desde Configuracion > Aplicaciones de Windows.
 echo.
 pause
